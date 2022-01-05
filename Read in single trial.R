@@ -7,7 +7,7 @@ theme_set(theme_bw())
 # ddfFile <- '../Raw Data/Force Data/Ful data sorted by row/Row 1 - 0.013/Trial 1/--100_1.ddf'
 # ddfFile <- '../Raw Data/Force Data/Ful data sorted by row/Row 1 - 0.013/Trial 2/--30000_1.ddf'
 # ddfFile <- '../Raw Data/Force Data/Ful data sorted by row/Row 10 - 4/Trial 1/--100_1.ddf'
-ddfFile <- '../Raw Data/Force Data/Ful data sorted by row/Row 10 - 4/Trial 1/--30000_1.ddf'
+ddfFile <- '100 mN data file.ddf'
 
 # ddfFile <- '../Raw Data/Force Data/Ful data sorted by row/Row 3 - 0.04/Trial 5/--30000_1.ddf'
 # ddfFile <- '../Raw Data/Force Data/Ful data sorted by row/Row 5 - 0.133/Trial 7/--100_1.ddf'
@@ -43,8 +43,8 @@ forceRamps <- find_ramps(scaledData, ptcl, ForceDeriv.Nps, forceRateThreshold)
 # save summary data
 scaledData %>%
   summarise_data(ramps = forceRamps) %>% 
-  mutate(sourceFile = str_extract(ddfFile, 'Row.*\\.ddf')) %>% glimpse()
-  #write_delim(paste0('../Processed Data/force_data_',format(Sys.time(), '%Y%m%d_%H%M%S.txt')), '\t')
+  mutate(sourceFile = str_extract(ddfFile, 'Row.*\\.ddf')) %>% #glimpse()
+  write_delim(paste0('Processed Data/force_data_',ddfFile,"_", format(Sys.time(), '%Y%m%d_%H%M%S.txt')), '\t')
 
 windows()
 
@@ -80,8 +80,10 @@ scaledData %>%
                                 ptcl$rampOnDuration.ms,'ms ramp.', 
                                 'Low pass butterworth filter',FilterFreqCutOff,'Hz')) 
 
-# outputFile <- ddfFile %>% 
-#   str_replace('../Raw Data/Force Data/Ful data sorted by row/', '../Processed Data/Force Plots - update/') %>% 
-#   str_replace('ddf', 'tiff')
-# if (!dir.exists(file.path(dirname(outputFile))) ) dir.create(file.path(dirname(outputFile)), recursive = TRUE)
-# ggsave(outputFile)
+outputfolder <- "Processed Data/forceplots/"
+outputFile <- ddfFile %>%
+  # str_replace('../Raw Data/Force Data/Ful data sorted by row/', '../Processed Data/Force Plots - update/') %>%
+  str_replace('ddf', 'tiff')
+if (!dir.exists(file.path(outputfolder)) ) dir.create(file.path(outputfolder), recursive = TRUE)
+ggsave(paste0(outputfolder,outputFile))
+
