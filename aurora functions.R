@@ -160,13 +160,14 @@ find_ramps <- function(scaledData, ptcl, channel, threshold) {
 }
 
 summarise_data <- function(df, ramps) {
-  df %>% 
+  output <- df %>% 
     mutate(phase = case_when(
       Time.ms %>% between(0, ramps$OnStart) ~ 'pre-stim', 
       Time.ms %>% between(ramps$OnStart, ramps$OnStop) ~ 'ramp on',
       Time.ms %>% between(ramps$OnStop, ramps$OffStart) ~ 'hold',
       Time.ms %>% between(ramps$OffStart, ramps$OffStop) ~ 'ramp off',
       Time.ms %>% between(ramps$OffStop, max(Time.ms)) ~ 'post-stim',
+      #ramps$OnStart %>% is.infinite ~ 'ramp not detected'
     ) %>% factor(levels = c('pre-stim', 'ramp on', 'hold', 'ramp off', 'post-stim'))) %>% 
     group_by(phase) %>% 
     summarise(
@@ -185,13 +186,21 @@ summarise_data <- function(df, ramps) {
       sdPosition.mm = mean(LengthFiltered.mm),
       meanVelocity.mmps = 1000*mean(LengthDeriv.mps, na.rm = TRUE),
       peakVelocity.mmps = 1000*LengthDeriv.mps[which.max(abs(LengthDeriv.mps))]
-    ) %>% 
-    mutate (
-      heldForce.mN = meanForce.mN[phase=='hold'] - meanForce.mN[phase=='pre-stim'],
-      heldPosition.mm = meanPosition.mm[phase=='hold'] - meanPosition.mm[phase=='pre-stim']
     )
+  
+  if ("hold" %in% output$phase) {
+    output <- output %>% 
+      mutate (
+        heldForce.mN = meanForce.mN[phase=='hold'] - meanForce.mN[phase=='pre-stim'],
+        heldPosition.mm = meanPosition.mm[phase=='hold'] - meanPosition.mm[phase=='pre-stim']
+      )
+  }
+  
+  return(output)
+  
 }
 
 sort_unique <- function(x) {
   y <- unique(x)
   y[order(y)] }
+

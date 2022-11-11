@@ -1,163 +1,204 @@
+library(signal)
 library(tidyverse)
 library(patchwork)
-library(svglite)
-
-# on ramp not detected properly:
-#   Row 10 - 4/Trial 9/--100_1.ddf 
-#   Row 9 - 2.2/Trial 1/--100_1.ddf
-
-force_data <- read_delim("../Processed Data/force_data_20200414_184944.txt", 
-                         "\t", escape_double = FALSE, trim_ws = TRUE) %>% 
-  filter(!str_detect(sourceFile, '(Row 10 - 4/Trial 9/--100_1\\.ddf)|(Row 9 - 2.2/Trial 1/--100_1\\.ddf)'))
+source('aurora functions.R')
 theme_set(theme_bw())
 
-theme_insidelegend <- function(x,y) {
-  theme(legend.position = c(x,y), 
-        legend.background = element_blank(),
-        legend.key = element_rect(colour = 'grey'))}
+#### this section specific to the data set ####
 
-#### QUALITY CONTROL FIGURES ####
+#dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
 
-force_data %>% 
-  filter(phase == 'ramp on') %>% 
-  mutate(PercentForceError = (forceChange.mN-targetForce.mN)/targetForce.mN*100,
-         targetRampTime.ms = factor(targetRampTime.ms),
-         targetForce.mN = factor(targetForce.mN)) %>% 
-  ggplot(aes(x = targetForce.mN, y = PercentForceError)) +
-  stat_summary(aes(colour = targetRampTime.ms), fun.data = 'mean_cl_normal', geom = 'errorbar',
-               position = position_dodge(0.3), width = 0.6, size = 0.6) +
-  labs(x = 'Target Force (mN)', y = 'Ramp Force Error (% of Target)', colour = 'Target Ramp Time (ms)',
-       title = '% Error in force reached during ramp on period') +
-  theme(legend.direction = 'horizontal') + theme_insidelegend(0.6,0.1) +
-  plot_annotation(caption = 'Ramp Force = maximum - minimum force during ramp phase.\nError bars are 95% confidence interval based on the standard error of the mean. N = 10 for each target force/ramp time combination.\nDifferent target ramp times for the same target force are shifted horizontally to avoid overplotting.')
-ggsave('../Figures/Force_PeakForceError.svg')
+#dataFolder <- 'C:/Experiments/DDF/01_ddf/'
+dataFolder <- 'C:/Users/emmku74/Desktop/New folder/'
+allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 
-force_data %>% 
-  filter(phase == 'hold') %>% 
-  mutate(PercentForceError = (heldForce.mN-targetForce.mN)/targetForce.mN*100,
-         targetRampTime.ms = factor(targetRampTime.ms),
-         targetForce.mN = factor(targetForce.mN)) %>% 
-  ggplot(aes(x = targetForce.mN, y = PercentForceError)) +
-  stat_summary(aes(colour = targetRampTime.ms), fun.data = 'mean_cl_normal', geom = 'errorbar',
-               position = position_dodge(0.3), width = 0.6, size = 0.6) +
-  labs(x = 'Target Force (mN)', y = 'Held Force Error (% of Target)', colour = 'Target Ramp Time (ms)',
-       title = '% Error in held force') +
-  theme(legend.direction = 'horizontal') + theme_insidelegend(0.5,0.1) +
-  plot_annotation(caption = 'Held Force = mean force during hold phase - mean force during pre-stim phase.\nError bars are 95% confidence interval based on the standard error of the mean. N = 10 for each target force/ramp time combination.\nDifferent target ramp times for the same target force are shifted horizontally to avoid overplotting.')
-ggsave('../Figures/Force_HoldError.svg')
+# this excludes bad data files and also sorts into length and force based on text in the file names
+sortedDataFiles <- tibble(filename = allDataFiles,
+                          type = case_when(
+                            !str_detect(filename,'(length)|(Velocity)|(bad)|(dont use)|([0-9]v)') ~ 'force',
+                            !str_detect(filename,'(force)|(Force)|(bad)|(dont use)') ~ 'length'
+                          )
+)
 
+# if you edit the above, you need to end up with something called forceDataFiles, which is the list of data files you want to process
+forceDataFiles <- sortedDataFiles %>% 
+  dplyr::filter(type == 'force') %>% pull(filename)
 
-force_data %>% 
-  filter(phase == 'ramp on') %>% 
-  mutate(PercentRampTimeError = (phaseDuration.ms-targetRampTime.ms)/targetRampTime.ms*100,
-         targetRampTime.ms = factor(targetRampTime.ms),
-         targetForce.mN = factor(targetForce.mN)) %>% 
-  ggplot(aes(x = targetRampTime.ms, y = PercentRampTimeError)) +
-  stat_summary(aes(colour = targetForce.mN), fun.data = 'mean_cl_normal', geom = 'errorbar',
-               position = position_dodge(0.3), width = 0.6, size = 0.6) +
-  labs(colour = 'Target Force (mN)', y = 'Ramp Time Error (% of Target)', x = 'Target Ramp Time (ms)',
-       title = '% Error in detected ramp duration') +
-  theme(legend.direction = 'horizontal') + theme_insidelegend(0.5,0.9) +
-  plot_annotation(caption = 'Detection of ramp onset and offset was based on a threshold of 10% of the target force rate.\nError bars are 95% confidence interval based on the standard error of the mean. N = 10 for each target force/ramp time combination.\nDifferent target ramp times for the same target force are shifted horizontally to avoid overplotting.')
-ggsave('../Figures/Force_RampTimeError.svg')
+#### ---- ####
 
+outputFolder <- '../Processed Data/'
+timenow <- format(Sys.time(), '%Y%m%d_%H%M%S')
+outputDataFile <- paste0(outputFolder, 'force_data_',timenow,'.txt')
+outputPlotFolder <- paste0(outputFolder,'Force Plots ',timenow,'/')
+outputTracesFolder <- paste0(outputFolder,'Force Overlay ',timenow,'/')
 
-#### Force rate ####
+overlayData <- tibble()
+for (n in seq_along(forceDataFiles)) {
+  # for (n in 211:356) {
+  ddfFile <- paste0(dataFolder,forceDataFiles[n])
+  
+  print(paste(n, 'of', length(forceDataFiles), ':', ddfFile))
+  
+  # read the protocol info
+  ptcl <- ddfFile %>% read_force_protocol(skip = 16, n_max = 5)
+  
+  # read the raw data
+  ddfData <- ddfFile %>% read_delim('\t', skip = 25, col_types = paste0(rep('d',12), collapse = ''))
+  #ddfData %>% plot_ddf_data()
+  
+  # make noise filter
+  SamplingRate <- read_lines(ddfFile, skip = 1, n_max = 1) %>% parse_number()
+  FilterFreqCutOff <- ceiling(10^(1.4 + 0.6*log10( 1000/ptcl$rampOnDuration.ms))) 
+  butterworthFilter <- butter(n = 2, W = FilterFreqCutOff/SamplingRate, type = "low")
+  
+  # data in real units, filtered data, and time derivative
+  scaleUnits <- read_lines(ddfFile, skip = 8, n_max = 1) %>% 
+    str_split('\t') %>% .[[1]] %>% .[-1] %>% parse_double()
+  
+  scaledData <- ddfData %>% 
+    scale_and_filter(scaleUnits, SamplingRate, butterworthFilter) %>% 
+    dplyr::filter(Time.ms %>% between(ptcl$stimWindowStart, ptcl$stimWindowEnd))
+  
+  # automatically find where the force ramps are
+  forceRateThreshold <- 0.1*(ptcl$targetForce.mN/ptcl$rampOnDuration.ms)
+  forceRamps <- find_ramps(scaledData, ptcl, ForceDeriv.Nps, forceRateThreshold)
+  
+  # save summary data
+  summaryData <- scaledData %>%
+    summarise_data(ramps = forceRamps) %>% 
+    mutate(targetForce.mN = ptcl$targetForce.mN,
+           targetRampTime.ms = ptcl$rampOnDuration.ms,
+           positionLimit.mm = ptcl$lengthLimit.mm,
+           sourceFile = ddfFile %>% str_replace(dataFolder,'')
+    ) 
+  
+  tare <- summaryData %>% 
+    dplyr::filter(phase == 'pre-stim') %>% 
+    select(meanForce.mN, meanPosition.mm)
+  
+  overlayData <- bind_rows(overlayData,
+                           scaledData %>% 
+                             mutate(Force.mN = ForceFiltered.mN - tare$meanForce.mN,
+                                    Length.mm = LengthFiltered.mm - tare$meanPosition.mm) %>% 
+                             select(Time.ms, Force.mN, Length.mm) %>% 
+                             mutate(targetForce.mN = ptcl$targetForce.mN,
+                                    targetRampTime.ms = ptcl$rampOnDuration.ms,
+                                    sourceFile = ddfFile %>% 
+                                      str_replace(dataFolder,'')
+                             )
+  )
+  
+  summaryData %>%
+    write_delim(paste0(outputDataFile), '\t', append = n>1)
+  print(paste("added data to", outputDataFile))
+  
+  # windows()
+  # 
+  # scaledData %>%
+  #   ggplot(aes(x = Time.ms)) +
+  #   geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
+  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+  #   geom_point(aes(y = ForceMeasured.mN), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
+  #   geom_point(aes(y = ForceFiltered.mN), colour = 'blue', size = 1) +
+  #   labs(title = 'Force trace', x = 'Time (ms)', y = 'Force (mN)') -> force.trace
+  # 
+  # scaledData %>%
+  #   ggplot(aes(x = Time.ms)) +
+  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+  #   geom_point(aes(y = ForceDeriv.Nps), colour = 'blue', size = 1) +
+  #   labs(title = 'Force derivative', x = 'Time (ms)', y = 'Force rate (N/s)') -> force.deriv
+  # 
+  # scaledData %>%
+  #   ggplot(aes(x = Time.ms)) +
+  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+  #   geom_point(aes(y = LengthMeasued.mm), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
+  #   geom_point(aes(y = LengthFiltered.mm), colour = 'purple', size = 1) +
+  #   labs(title = paste('Displacement trace, limit =', ptcl$lengthLimit.mm, 'mm'),
+  #        x = 'Time (ms)', y = 'Displacement (mm)') -> disp.trace
+  # 
+  # scaledData %>%
+  #   ggplot(aes(x = Time.ms)) +
+  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+  #   geom_point(aes(y = LengthDeriv.mps), colour = 'purple', size = 1) +
+  #   labs(title = 'Displacement derivative', x = 'Time (ms)', y = 'Velocity (m/s)') -> disp.deriv
+  # 
+  # force.trace / force.deriv / disp.trace / disp.deriv +
+  #   plot_annotation(title = paste('Target =', ptcl$targetForce.mN,'mN.',
+  #                                 ptcl$rampOnDuration.ms,'ms ramp.',
+  #                                 'Low pass butterworth filter',FilterFreqCutOff,'Hz'))
+  # 
+  # plotFile <- ddfFile %>%
+  #   str_replace(dataFolder,'') %>%
+  #   str_replace_all('/','_') %>%
+  #   paste0(outputPlotFolder,.) %>%
+  #   str_replace('ddf', 'tiff')
+  # 
+  # if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
+  # ggsave(plotFile)
+  # print(paste('saved figure:',plotFile))
+  # 
+  # dev.off()
+}
 
-force_data %>% 
-  filter(phase == 'ramp on') %>% 
-  mutate(targetRampTime.ms = factor(targetRampTime.ms),
-         targetForce.mN = factor(targetForce.mN)) %>% 
-  nest(data = -c(targetRampTime.ms,targetForce.mN)) %>% 
-  mutate(mForR = map(data, ~ mean_cl_normal(.x$meanForceRate.mNps/1000)),
-         pForR = map(data, ~ mean_cl_normal(.x$peakForceRate.mNps/1000))) %>% 
-  unnest(mForR, names_sep = '_') %>% 
-  unnest(pForR, names_sep = '_') %>% 
-  ggplot(aes(x = mForR_y, y = pForR_y)) +
-  geom_errorbar(aes(colour = targetRampTime.ms, ymin = pForR_ymin, ymax = pForR_ymax), size = 0.6, width = 0) +
-  geom_errorbarh(aes(colour = targetRampTime.ms, xmin = mForR_ymin, xmax = mForR_ymax), size = 0.6, height = 0) +
-  geom_abline(intercept = 0, slope = 1, colour = 'grey') +
-  geom_point(aes(colour = targetRampTime.ms), alpha = 0.3, size = 2) +
-  scale_x_log10(labels = c(0.01,0.1,1.0,10,100), breaks = c(0.01,0.1,1.0,10,100)) + 
-  scale_y_log10(labels = c(0.01,0.1,1.0,10,100), breaks = c(0.01,0.1,1.0,10,100)) +
-  labs(x = 'Mean Force Rate (N/sec)', y = 'Peak Force Rate (N/sec)', colour = 'Target Ramp Time (ms)',
-       title = 'Mean vs Peak Force Rate') +
-  theme(legend.direction = 'horizontal') + theme_insidelegend(0.6,0.15) +
-  plot_annotation(caption = 'Mean and peak force rate during the ramp on phase.\nError bars are 95% confidence interval based on the standard error of the mean. N = 10 for each target force/ramp time combination.')
-ggsave('../Figures/Force_Mean_vs_Peak_ForceRate.svg')
+#read about group_by and see if you can  
+rampforcecombo <- overlayData %>% 
+  group_by(targetForce.mN,targetRampTime.ms,sourceFile) %>%
+  tally() %>% 
+  xtabs( ~ targetForce.mN + targetRampTime.ms, .)
 
+ramps <- sort_unique(overlayData$targetRampTime.ms)
+forces <- sort_unique(overlayData$targetForce.mN)
 
-#### Velocity ####
+for (ramp_n in seq_along(ramps)) {
+  #plotlist = list()
+  for (force_n in seq_along(forces)) {
+    current_force_str <- toString(forces[force_n])
+    current_ramp_str <- toString(ramps[ramp_n])
+    if (rampforcecombo[current_force_str, current_ramp_str] > 0) {
+      print("plotting...")
+      print(ramps[ramp_n])
+      print(forces[force_n])      
+    }
+  }
+}
 
-force_data %>% 
-  filter(phase == 'ramp on') %>% 
-  mutate(targetRampTime.ms = factor(targetRampTime.ms),
-         targetForce.mN = factor(targetForce.mN)) %>% 
-  nest(data = -c(targetRampTime.ms,targetForce.mN)) %>% 
-  mutate(mVel = map(data, ~ mean_cl_normal(.x$meanVelocity.mmps)),
-         pVel = map(data, ~ mean_cl_normal(.x$peakVelocity.mmps))) %>% 
-  unnest(mVel, names_sep = '_') %>% 
-  unnest(pVel, names_sep = '_') %>% 
-  ggplot(aes(x = mVel_y, y = pVel_y)) +
-  geom_errorbar(aes(colour = targetRampTime.ms, ymin = pVel_ymin, ymax = pVel_ymax), size = 0.6, width = 0) +
-  geom_errorbarh(aes(colour = targetRampTime.ms, xmin = mVel_ymin, xmax = mVel_ymax), size = 0.6, height = 0) +
-  geom_abline(intercept = 0, slope = 1, colour = 'grey') +
-  geom_point(aes(colour = targetRampTime.ms), alpha = 0.3, size = 2) +
-  scale_x_log10(labels = c(0.01,0.1,1.0,10,100,1000), breaks = c(0.01,0.1,1.0,10,100,1000)) + 
-  scale_y_log10(labels = c(0.01,0.1,1.0,10,100,1000), breaks = c(0.01,0.1,1.0,10,100,1000)) +
-  labs(x = 'Mean Velocity (mm/sec)', y = 'Peak Velocity (mm/sec)', colour = 'Target Ramp Time (ms)',
-       title = 'Mean vs Peak Velocity') +
-  theme(legend.direction = 'horizontal') + theme_insidelegend(0.35,0.9) +
-  plot_annotation(caption = 'Mean and peak velocity during the ramp on phase.\nError bars are 95% confidence interval based on the standard error of the mean. N = 10 for each target force/ramp time combination.')
-ggsave('../Figures/Force_Mean_vs_Peak_Velocity.svg')
-
-
-#### Psychophysics stim set ####
-
-force_data %>% 
-  filter(phase == 'ramp on') %>% 
-  mutate(targetRampTime.ms = factor(targetRampTime.ms),
-         targetForce.mN = factor(targetForce.mN)) %>% 
-  nest(data = -c(targetRampTime.ms,targetForce.mN)) %>% 
-  mutate(pVel = map(data, ~ mean_cl_normal(.x$peakVelocity.mmps)),
-         pFor = map(data, ~ mean_cl_normal(.x$forceChange.mN))) %>% 
-  unnest(pVel, names_sep = '_') %>% 
-  unnest(pFor, names_sep = '_') %>% 
-  ggplot(aes(x = pFor_y, y = pVel_y)) +
-  geom_rect(aes(xmin = 95, xmax = 3500, ymin = 9, ymax = 50), fill = NA, colour = 'grey', size = 0.3) +
-  geom_rect(aes(xmin = 50, xmax = 500, ymin = 1.4, ymax = 8), fill = NA, colour = 'grey', size = 0.3) +
-  geom_errorbar(aes(colour = targetRampTime.ms, ymin = pVel_ymin, ymax = pVel_ymax), size = 0.6, width = 0) +
-  geom_errorbarh(aes(colour = targetRampTime.ms, xmin = pFor_ymin, xmax = pFor_ymax), size = 0.6, height = 0) +
-  geom_point(aes(colour = targetRampTime.ms), alpha = 0.3, size = 2) +
-  scale_x_log10() + scale_y_log10(labels = c(0.1,1.0,10,100,1000), breaks = c(0.1,1.0,10,100,1000)) +
-  labs(x = 'Peak Force (mN)', y = 'Peak Velocity (mm/sec)', colour = 'Target Ramp Time (ms)',
-       title = 'Peak Force vs. Peak Velocity') +
-  theme(legend.direction = 'horizontal') + theme_insidelegend(0.6,0.15) +
-  annotate(geom = 'text', x = c(150,80), y = c(38,6), label = c('A','B'), colour = 'darkgrey') +
-  plot_annotation(caption = 'Peak force and velocity during the ramp on phase.\nError bars are 95% confidence interval based on the standard error of the mean. N = 10 for each target force/ramp time combination.\n A and B indicate candidate stimulus sets for a psychophysics experiment with a fast and slow velocity, covering a range of forces.\nA: high velocity 50mm/s, low velocity 9mm/s, forces between 100 and 3000mN.\nB: high velocity 8mm/s, low velocity 1.4mm/s, forces between 50 and 500mN.')
-ggsave('../Figures/Force_PeakForce_vs_PeakVelocity.svg')
-
-#### Compare to finger press ####
-
-force_data %>% 
-  filter(phase == 'ramp on') %>% 
-  mutate(targetRampTime.ms = factor(targetRampTime.ms),
-         targetForce.mN = factor(targetForce.mN)) %>% 
-  nest(data = -c(targetRampTime.ms,targetForce.mN)) %>% 
-  mutate(pDisp = map(data, ~ mean_cl_normal(.x$positionChange.mm)),
-         mForR = map(data, ~ mean_cl_normal(.x$meanForceRate.mNps/1000))) %>% 
-  unnest(pDisp, names_sep = '_') %>% 
-  unnest(mForR, names_sep = '_') %>% 
-  ggplot(aes(x = mForR_y, y = pDisp_y)) +
-  geom_rect(aes(xmin = 3, xmax = 10, ymin = 5, ymax = 9), fill = NA, colour = 'grey') +
-  geom_errorbar(aes(colour = targetRampTime.ms, ymin = pDisp_ymin, ymax = pDisp_ymax), size = 0.6, width = 0) +
-  geom_errorbarh(aes(colour = targetRampTime.ms, xmin = mForR_ymin, xmax = mForR_ymax), size = 0.6, height = 0) +
-  geom_point(aes(colour = targetRampTime.ms), alpha = 0.3, size = 2) +
-  scale_x_log10(labels = c(0.01,0.1,1.0,10,100), breaks = c(0.01,0.1,1.0,10,100)) + 
-  scale_y_continuous(trans = 'log1p')  +
-  labs(x = 'Mean Force Rate (N/sec)', y = 'Peak Displacement (mm)', colour = 'Target Ramp Time (ms)',
-       title = 'Peak Displacement vs. Mean Force Rate') +
-  theme_insidelegend(0.13,0.57) +
-  plot_annotation(caption = 'Peak displacement vs. mean force rate during the ramp on phase.\nError bars are 95% confidence interval based on the standard error of the mean. N = 10 for each target force/ramp time combination.\n The grey box indicates force and displacement ranges observed in another experiment in which people pressed a finger into a plum.')
-ggsave('../Figures/Force_PeakDisp_vs_MeanForceRate.svg')
-
+for (ramp_n in seq_along(ramps)) {
+  plotlist = list()
+  for (force_n in seq_along(forces)) {
+    plotData <- overlayData %>% 
+      dplyr::filter(targetRampTime.ms == ramps[ramp_n] & targetForce.mN == forces[force_n]) %>% 
+      mutate(nfiles = n_distinct(sourceFile),
+             targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles))
+    
+    current_force_str <- toString(forces[force_n])
+    current_ramp_str <- toString(ramps[ramp_n])
+    if (rampforcecombo[current_force_str, current_ramp_str] > 0) {
+      
+      force.trace <- plotData %>%
+        ggplot(aes(x = Time.ms/1000, y = Force.mN)) +
+        facet_wrap( ~ targetForceLabel) +
+        geom_line(aes(group = sourceFile), size = 0.5, alpha = 0.4) +
+        labs(x = NULL, y = NULL)
+      if (force_n==1) force.trace <- force.trace + labs(y = 'Force (mN)') 
+      
+      pos.trace <- plotData %>%
+        ggplot(aes(x = Time.ms/1000, y = Length.mm)) +
+        facet_wrap( ~ targetForceLabel) +
+        geom_line(aes(group = sourceFile), size = 0.5, alpha = 0.4) +
+        labs(x = 'Time (sec)', y = NULL)
+      if (force_n==1) pos.trace <- pos.trace + labs(y = 'Position (mm)')
+      
+      plotlist[[force_n]] = (force.trace / pos.trace)
+    }
+  }
+  
+  windows(17.5,4.5)
+  wrap_plots(plotlist, ncol = length(forces)) + 
+    plot_annotation(title = paste0('Ramp = ',ramps[ramp_n],'ms'),
+                    caption = paste0('Overlaid force traces (top) and position traces (bottom) for different target forces (columns) with ramp time = ',ramps[ramp_n],'ms'))
+  
+  plotFile <- paste0(outputTracesFolder,'Force overlay ',ramps[ramp_n],'ms ramp.tiff')
+  if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
+  ggsave(plotFile)
+  dev.off()
+}
