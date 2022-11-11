@@ -8,7 +8,7 @@ theme_set(theme_bw())
 
 #dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
 
-#dataFolder <- 'C:/Experiments/DDF/01_ddf/'
+dataFolder <- 'C:/Experiments/DDF/01_ddf/'
 dataFolder <- 'C:/Users/emmku74/Desktop/New folder/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 
@@ -148,19 +148,6 @@ rampforcecombo <- overlayData %>%
 
 ramps <- sort_unique(overlayData$targetRampTime.ms)
 forces <- sort_unique(overlayData$targetForce.mN)
-
-for (ramp_n in seq_along(ramps)) {
-  #plotlist = list()
-  for (force_n in seq_along(forces)) {
-    current_force_str <- toString(forces[force_n])
-    current_ramp_str <- toString(ramps[ramp_n])
-    if (rampforcecombo[current_force_str, current_ramp_str] > 0) {
-      print("plotting...")
-      print(ramps[ramp_n])
-      print(forces[force_n])      
-    }
-  }
-}
 
 for (ramp_n in seq_along(ramps)) {
   plotlist = list()
