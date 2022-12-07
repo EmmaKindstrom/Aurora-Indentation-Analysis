@@ -8,8 +8,10 @@ theme_set(theme_bw())
 
 #dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
 
+dataFolder <- 'C:/Users/emmku74/Desktop/01_ddf/'
 dataFolder <- 'C:/Experiments/DDF/01_ddf/'
 dataFolder <- 'C:/Users/emmku74/Desktop/New folder/'
+dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 
 # this excludes bad data files and also sorts into length and force based on text in the file names
@@ -26,7 +28,7 @@ forceDataFiles <- sortedDataFiles %>%
 
 #### ---- ####
 
-outputFolder <- '../Processed Data/'
+outputFolder <- './Processed Data/'
 timenow <- format(Sys.time(), '%Y%m%d_%H%M%S')
 outputDataFile <- paste0(outputFolder, 'force_data_',timenow,'.txt')
 outputPlotFolder <- paste0(outputFolder,'Force Plots ',timenow,'/')
@@ -148,44 +150,59 @@ rampforcecombo <- overlayData %>%
 
 ramps <- sort_unique(overlayData$targetRampTime.ms)
 forces <- sort_unique(overlayData$targetForce.mN)
+# PIDs <- overlayData$sourceFile %>%
+#   str_extract("_P[0-9]+_") %>% 
+#   str_remove_all("_") %>% 
+#   sort_unique()
 
 for (ramp_n in seq_along(ramps)) {
-  plotlist = list()
+  # ramp_n <- 2
+  # plotlist = list()
   for (force_n in seq_along(forces)) {
     plotData <- overlayData %>% 
       dplyr::filter(targetRampTime.ms == ramps[ramp_n] & targetForce.mN == forces[force_n]) %>% 
-      mutate(nfiles = n_distinct(sourceFile),
-             targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles))
+      mutate(
+        nfiles = n_distinct(sourceFile),
+        targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles),
+        condition = sourceFile %>% 
+          str_extract("_(film)|(shaved)_") %>% 
+          str_remove_all("_"),
+        PID = sourceFile %>% 
+          str_extract("_P[0-9]+_") %>% 
+          str_remove_all("_")
+        )
     
     current_force_str <- toString(forces[force_n])
     current_ramp_str <- toString(ramps[ramp_n])
+    print("...")
+    print(paste0("force", current_force_str))
+    print(paste0("ramp", current_ramp_str))
     if (rampforcecombo[current_force_str, current_ramp_str] > 0) {
       
       force.trace <- plotData %>%
         ggplot(aes(x = Time.ms/1000, y = Force.mN)) +
-        facet_wrap( ~ targetForceLabel) +
-        geom_line(aes(group = sourceFile), size = 0.5, alpha = 0.4) +
+        facet_wrap(PID ~ targetForceLabel) +
+        geom_line(aes(group = sourceFile, colour = condition), size = 0.5, alpha = 0.4) +
         labs(x = NULL, y = NULL)
       if (force_n==1) force.trace <- force.trace + labs(y = 'Force (mN)') 
       
       pos.trace <- plotData %>%
         ggplot(aes(x = Time.ms/1000, y = Length.mm)) +
-        facet_wrap( ~ targetForceLabel) +
-        geom_line(aes(group = sourceFile), size = 0.5, alpha = 0.4) +
+        facet_wrap(PID ~ targetForceLabel) +
+        geom_line(aes(group = sourceFile, colour = condition), size = 0.5, alpha = 0.4) +
         labs(x = 'Time (sec)', y = NULL)
       if (force_n==1) pos.trace <- pos.trace + labs(y = 'Position (mm)')
       
-      plotlist[[force_n]] = (force.trace / pos.trace)
+      print("adding to list")
+      windows(20.3, 20.8)
+       (force.trace / pos.trace)  + 
+        plot_annotation(title = paste0('Ramp = ',ramps[ramp_n],'ms'),
+                        caption = paste0('Overlaid force traces (top) and position traces (bottom) with ramp time = ',ramps[ramp_n],'ms'))
+      
+      plotFile <- paste0(outputTracesFolder,'Force overlay ',forces[force_n],'mN.tiff')
+      if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
+      ggsave(plotFile)
+      dev.off()
     }
   }
-  
-  windows(17.5,4.5)
-  wrap_plots(plotlist, ncol = length(forces)) + 
-    plot_annotation(title = paste0('Ramp = ',ramps[ramp_n],'ms'),
-                    caption = paste0('Overlaid force traces (top) and position traces (bottom) for different target forces (columns) with ramp time = ',ramps[ramp_n],'ms'))
-  
-  plotFile <- paste0(outputTracesFolder,'Force overlay ',ramps[ramp_n],'ms ramp.tiff')
-  if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
-  ggsave(plotFile)
-  dev.off()
 }
