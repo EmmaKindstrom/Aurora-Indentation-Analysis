@@ -1,8 +1,10 @@
 library(signal)
 library(tidyverse)
 library(patchwork)
+library(stringr)
 source('aurora functions.R')
 theme_set(theme_bw())
+install.packages('stringr')
 
 #### this section specific to the data set ####
 
@@ -181,20 +183,20 @@ for (ramp_n in seq_along(ramps)) {
       
       force.trace <- plotData %>%
         ggplot(aes(x = Time.ms/1000, y = Force.mN)) +
-        facet_wrap(PID ~ targetForceLabel) +
+        facet_wrap(PID ~ targetForceLabel, ncol=9) +
         geom_line(aes(group = sourceFile, colour = condition), size = 0.5, alpha = 0.4) +
         labs(x = NULL, y = NULL)
       if (force_n==1) force.trace <- force.trace + labs(y = 'Force (mN)') 
       
       pos.trace <- plotData %>%
         ggplot(aes(x = Time.ms/1000, y = Length.mm)) +
-        facet_wrap(PID ~ targetForceLabel) +
+        facet_wrap(PID ~ targetForceLabel, ncol=9) +
         geom_line(aes(group = sourceFile, colour = condition), size = 0.5, alpha = 0.4) +
         labs(x = 'Time (sec)', y = NULL)
       if (force_n==1) pos.trace <- pos.trace + labs(y = 'Position (mm)')
       
       print("adding to list")
-      windows(20.3, 20.8)
+      windows(20, 11)
        (force.trace / pos.trace)  + 
         plot_annotation(title = paste0('Ramp = ',ramps[ramp_n],'ms'),
                         caption = paste0('Overlaid force traces (top) and position traces (bottom) with ramp time = ',ramps[ramp_n],'ms'))
@@ -206,3 +208,4 @@ for (ramp_n in seq_along(ramps)) {
     }
   }
 }
+
