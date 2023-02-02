@@ -7,12 +7,9 @@ theme_set(theme_bw())
 
 #### this section specific to the data set ####
 
-#dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
-
-dataFolder <- 'C:/Users/emmku74/Desktop/01_ddf/'
-dataFolder <- 'C:/Experiments/DDF/01_ddf/'
-dataFolder <- 'C:/Users/emmku74/Desktop/New folder/'
+# Reading in all ddf files
 dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
+#dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/02_ddf/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 
 # this excludes bad data files and also sorts into length and force based on text in the file names
@@ -26,6 +23,60 @@ sortedDataFiles <- tibble(filename = allDataFiles,
 # if you edit the above, you need to end up with something called forceDataFiles, which is the list of data files you want to process
 forceDataFiles <- sortedDataFiles %>% 
   dplyr::filter(type == 'force') %>% pull(filename)
+
+### This section reads in all setting files and matches the condition with corresponding ddf file ###
+settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings/'
+settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings_p02/'
+allSettingFiles <- list.files(settingsFolder, 'settings', full.names = TRUE)
+
+df <- tibble()
+
+for (currentsettingfile in allSettingFiles) {
+  currentsettingdata <- read_csv(currentsettingfile, col_names =  c("information", "data"), show_col_types = FALSE)%>% 
+    mutate(filename = currentsettingfile)
+  df = rbind(df, currentsettingdata)
+}
+
+filtersetting <- tibble()
+filtersetting <- df %>% dplyr::filter(information == "07. Intervention (film/shaved)")
+
+datafilename <- filtersetting[,-1]
+view(datafilename)
+
+#removes part of the setting file name and leaves the time stamp
+datafilename$filename_date <- str_remove(datafilename$filename, "_P[0-9]{2}_settings.csv")
+datafilename$filename_date <- str_remove(datafilename$filename_date, "_P[0-9]{2}_film_settings.csv")
+datafilename$filename_date <- str_remove(datafilename$filename_date, "_P[0-9]{2}_shaved_settings.csv")
+datafilename$filename_date <- str_remove(datafilename$filename_date, "C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings/film-shaved-aurora_")
+datafilename <- datafilename[,-2]
+
+view(datafilename)
+
+
+#create a list with the same length as DataFiles to later insert the condition to the DataFile
+fixedconditions <- vector(mode = 'character',length(forceDataFiles))
+
+#index to retrieve the condition from the setting files 
+ctr <- 1
+for (this_setting_time in datafilename$filename_date){
+  #grepl returns list of Booleans when it finds a match between the data file name and the timestamp from the settingsfilename
+  #The bools list should be as long as the length of DataFiles
+  bools <- grepl(this_setting_time, forceDataFiles)
+  #Find indexes where a match was found 
+  index_list <- which(bools==TRUE)
+  #Get the condition from the settings file, ctr will be = amount of datafilename rows
+  condition <- datafilename[ctr,1]
+  # for each position in the index_list where a match was found, insert the right condition to fixedconditions list
+  for (idx in index_list) {
+    fixedconditions[idx] <- condition
+  }
+  ctr <- ctr +1
+}
+#The fixed conditions should be paired with the correct DataFiles positions (index)
+#cbind will join the datafile name and the condition in the same table in two columns (coloumn bind = cbind)
+DataFiles_conditions <- cbind(forceDataFiles, fixedconditions)
+
+view(DataFiles_conditions)
 
 #### ---- ####
 
@@ -69,7 +120,8 @@ for (n in seq_along(forceDataFiles)) {
   # save summary data
   summaryData <- scaledData %>%
     summarise_data(ramps = forceRamps) %>% 
-    mutate(targetForce.mN = ptcl$targetForce.mN,
+    mutate(condition = fixedconditions[[n]],
+      targetForce.mN = ptcl$targetForce.mN,
            targetRampTime.ms = ptcl$rampOnDuration.ms,
            positionLimit.mm = ptcl$lengthLimit.mm,
            sourceFile = ddfFile %>% str_replace(dataFolder,'')
@@ -81,16 +133,19 @@ for (n in seq_along(forceDataFiles)) {
   
   overlayData <- bind_rows(overlayData,
                            scaledData %>% 
-                             mutate(Force.mN = ForceFiltered.mN - tare$meanForce.mN,
+                             mutate(condition = fixedconditions[[n]],
+                              Force.mN = ForceFiltered.mN - tare$meanForce.mN,
                                     Length.mm = LengthFiltered.mm - tare$meanPosition.mm) %>% 
-                             select(Time.ms, Force.mN, Length.mm) %>% 
+                             select(Time.ms, Force.mN, Length.mm, condition) %>% 
                              mutate(targetForce.mN = ptcl$targetForce.mN,
                                     targetRampTime.ms = ptcl$rampOnDuration.ms,
                                     sourceFile = ddfFile %>% 
                                       str_replace(dataFolder,'')
+                                    
                              )
   )
   
+
   summaryData %>%
     write_delim(paste0(outputDataFile), '\t', append = n>1)
   print(paste("added data to", outputDataFile))
@@ -143,7 +198,6 @@ for (n in seq_along(forceDataFiles)) {
   # dev.off()
 }
 
-#read about group_by and see if you can  
 rampforcecombo <- overlayData %>% 
   group_by(targetForce.mN,targetRampTime.ms,sourceFile) %>%
   tally() %>% 
@@ -166,13 +220,10 @@ for (ramp_n in seq_along(ramps)) {
         nfiles = n_distinct(sourceFile),
         targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles),
         
-        condition = sourceFile %>% 
-          str_extract("_(film)|(shaved)_") %>% 
-          str_remove_all("_"),
         PID = sourceFile %>% 
           str_extract("_P[0-9]+_") %>% 
           str_remove_all("_")
-        )
+      )
     
     current_force_str <- toString(forces[force_n])
     current_ramp_str <- toString(ramps[ramp_n])
@@ -197,7 +248,7 @@ for (ramp_n in seq_along(ramps)) {
       
       print("adding to list")
       windows(20, 11)
-       (force.trace / pos.trace)  + 
+      (force.trace / pos.trace)  + 
         plot_annotation(title = paste0('Ramp = ',ramps[ramp_n],'ms'),
                         caption = paste0('Overlaid force traces (top) and position traces (bottom) with ramp time = ',ramps[ramp_n],'ms'))
       
