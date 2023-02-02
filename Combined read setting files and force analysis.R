@@ -9,7 +9,7 @@ theme_set(theme_bw())
 
 # Reading in all ddf files
 dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
-#dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/02_ddf/'
+dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/12_ddf/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 
 # this excludes bad data files and also sorts into length and force based on text in the file names
@@ -26,7 +26,7 @@ forceDataFiles <- sortedDataFiles %>%
 
 ### This section reads in all setting files and matches the condition with corresponding ddf file ###
 settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings/'
-settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings_p02/'
+settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings_p12/'
 allSettingFiles <- list.files(settingsFolder, 'settings', full.names = TRUE)
 
 df <- tibble()
@@ -135,8 +135,9 @@ for (n in seq_along(forceDataFiles)) {
                            scaledData %>% 
                              mutate(condition = fixedconditions[[n]],
                               Force.mN = ForceFiltered.mN - tare$meanForce.mN,
-                                    Length.mm = LengthFiltered.mm - tare$meanPosition.mm) %>% 
-                             select(Time.ms, Force.mN, Length.mm, condition) %>% 
+                                    Length.mm = LengthFiltered.mm - tare$meanPosition.mm,
+                                    outliers = if_else(overlayData$Force.mN[[n]] > 50 + overlayData$targetForce.mN [[n]], "include", "exclude", "missing")) %>% 
+                             select(Time.ms, Force.mN, Length.mm, condition, outliers) %>% 
                              mutate(targetForce.mN = ptcl$targetForce.mN,
                                     targetRampTime.ms = ptcl$rampOnDuration.ms,
                                     sourceFile = ddfFile %>% 
@@ -149,6 +150,7 @@ for (n in seq_along(forceDataFiles)) {
   summaryData %>%
     write_delim(paste0(outputDataFile), '\t', append = n>1)
   print(paste("added data to", outputDataFile))
+  
   
   # windows()
   # 
