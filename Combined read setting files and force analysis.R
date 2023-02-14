@@ -9,7 +9,7 @@ theme_set(theme_bw())
 
 # Reading in all ddf files
 dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
-dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/12_ddf/'
+#dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/12_ddf/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 
 # this excludes bad data files and also sorts into length and force based on text in the file names
@@ -26,7 +26,7 @@ forceDataFiles <- sortedDataFiles %>%
 
 ### This section reads in all setting files and matches the condition with corresponding ddf file ###
 settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings/'
-settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings_p12/'
+#settingsFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings_p12/'
 allSettingFiles <- list.files(settingsFolder, 'settings', full.names = TRUE)
 
 df <- tibble()
@@ -41,7 +41,7 @@ filtersetting <- tibble()
 filtersetting <- df %>% dplyr::filter(information == "07. Intervention (film/shaved)")
 
 datafilename <- filtersetting[,-1]
-view(datafilename)
+#view(datafilename)
 
 #removes part of the setting file name and leaves the time stamp
 datafilename$filename_date <- str_remove(datafilename$filename, "_P[0-9]{2}_settings.csv")
@@ -50,7 +50,7 @@ datafilename$filename_date <- str_remove(datafilename$filename_date, "_P[0-9]{2}
 datafilename$filename_date <- str_remove(datafilename$filename_date, "C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/settings/film-shaved-aurora_")
 datafilename <- datafilename[,-2]
 
-view(datafilename)
+#view(datafilename)
 
 
 #create a list with the same length as DataFiles to later insert the condition to the DataFile
@@ -86,9 +86,10 @@ outputDataFile <- paste0(outputFolder, 'force_data_',timenow,'.txt')
 outputPlotFolder <- paste0(outputFolder,'Force Plots ',timenow,'/')
 outputTracesFolder <- paste0(outputFolder,'Force Overlay ',timenow,'/')
 
+
 overlayData <- tibble()
-for (n in seq_along(forceDataFiles)) {
-  # for (n in 211:356) {
+# for (n in seq_along(forceDataFiles)) {
+for (n in 1:1000) {
   ddfFile <- paste0(dataFolder,forceDataFiles[n])
   
   print(paste(n, 'of', length(forceDataFiles), ':', ddfFile))
@@ -127,16 +128,33 @@ for (n in seq_along(forceDataFiles)) {
            sourceFile = ddfFile %>% str_replace(dataFolder,'')
     ) 
   
+  #Sets the threshold for the values that should be excluded from the plot (define outliers)
+  UpperThreshold <- (ptcl$targetForce.mN*1.1)
+  LowerThreshold <- (ptcl$targetForce.mN*0.9)
+  
+  peakhold <- summaryData$peakForce.mN[3]
+  minhold  <- summaryData$minimumForce.mN[3]
+  
+  outliers = if_else(
+    between(peakhold, LowerThreshold, UpperThreshold) & 
+      between(minhold, LowerThreshold, UpperThreshold), 
+    "include", 
+    "exclude", 
+    "missing"
+    )
+  
   tare <- summaryData %>% 
     dplyr::filter(phase == 'pre-stim') %>% 
     select(meanForce.mN, meanPosition.mm)
   
   overlayData <- bind_rows(overlayData,
                            scaledData %>% 
-                             mutate(condition = fixedconditions[[n]],
-                              Force.mN = ForceFiltered.mN - tare$meanForce.mN,
-                                    Length.mm = LengthFiltered.mm - tare$meanPosition.mm,
-                                    outliers = if_else(overlayData$Force.mN[[n]] > 50 + overlayData$targetForce.mN [[n]], "include", "exclude", "missing")) %>% 
+                             mutate(
+                               condition = fixedconditions[[n]],
+                               Force.mN = ForceFiltered.mN - tare$meanForce.mN,
+                               Length.mm = LengthFiltered.mm - tare$meanPosition.mm,
+                               outliers = outliers
+                               ) %>% 
                              select(Time.ms, Force.mN, Length.mm, condition, outliers) %>% 
                              mutate(targetForce.mN = ptcl$targetForce.mN,
                                     targetRampTime.ms = ptcl$rampOnDuration.ms,
@@ -200,6 +218,12 @@ for (n in seq_along(forceDataFiles)) {
   # dev.off()
 }
 
+# see what files we read in
+overlayData %>% 
+  group_by(sourceFile) %>% tally()
+
+unique(overlayData$sourceFile)
+
 rampforcecombo <- overlayData %>% 
   group_by(targetForce.mN,targetRampTime.ms,sourceFile) %>%
   tally() %>% 
@@ -212,12 +236,13 @@ forces <- sort_unique(overlayData$targetForce.mN)
 #   str_remove_all("_") %>% 
 #   sort_unique()
 
+#change include to exclude to plot both datasets (compare to find a good upper and lower threshold)
 for (ramp_n in seq_along(ramps)) {
   # ramp_n <- 2
   # plotlist = list()
   for (force_n in seq_along(forces)) {
     plotData <- overlayData %>% 
-      dplyr::filter(targetRampTime.ms == ramps[ramp_n] & targetForce.mN == forces[force_n]) %>% 
+      dplyr::filter(targetRampTime.ms == ramps[ramp_n] & targetForce.mN == forces[force_n] & outliers == "include") %>% 
       mutate(
         nfiles = n_distinct(sourceFile),
         targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles),

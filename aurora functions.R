@@ -174,6 +174,7 @@ summarise_data <- function(df, ramps) {
       phaseDuration.ms = max(Time.ms) - min(Time.ms),
       
       peakForce.mN = max(ForceFiltered.mN),
+      minimumForce.mN = min(ForceFiltered.mN),
       forceChange.mN = max(ForceFiltered.mN) - min(ForceFiltered.mN),
       meanForce.mN = mean(ForceFiltered.mN),
       sdForce.mN = sd(ForceFiltered.mN),

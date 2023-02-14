@@ -16,3 +16,4 @@ plotData %>%
   ) %>% 
   group_by(condition) %>% 
   tally()
+
