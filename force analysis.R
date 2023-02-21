@@ -134,7 +134,7 @@ for (n in seq_along(forceDataFiles)) {
   #   str_replace(dataFolder,'') %>%
   #   str_replace_all('/','_') %>%
   #   paste0(outputPlotFolder,.) %>%
-  #   str_replace('ddf', 'tiff')
+  #   str_replace('\\.ddf', '\\.tiff')
   # 
   # if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
   # ggsave(plotFile)
