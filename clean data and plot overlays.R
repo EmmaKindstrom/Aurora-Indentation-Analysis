@@ -1,4 +1,3 @@
-library(signal)
 library(tidyverse)
 library(patchwork)
 library(stringr)
@@ -9,7 +8,10 @@ theme_set(theme_bw())
 processedDataFolder <- './Processed Data/'
 processTime <- "20230220_120823"
 overlayData <- read_tsv(paste0(processedDataFolder, "force_overlay_data_",processTime,".txt"))
-summaryData <- read_tsv(paste0(processedDataFolder, "force_summary_data_",processTime,".txt"))
+summaryData <- read_tsv(paste0(processedDataFolder, "force_summary_data_",processTime,".txt")) %>% 
+  mutate(PID = sourceFile %>% 
+            str_extract("_P[0-9]+_") %>% 
+            str_remove_all("_"))
 
 #combinedData <- full_join(overlayData, summaryData) 
 
@@ -24,14 +26,10 @@ unique(overlayData$sourceFile)
 summaryData %>%
   filter(phase == "hold") %>% 
   ggplot(mapping = aes(x = heldForce.mN/targetForce.mN)) +
+  facet_wrap( vars(PID), scales = "free") +
   geom_histogram(binwidth = 0.1)
 
-summaryData %>%
-  filter(phase == "hold") %>% 
-  filter(heldForce.mN/targetForce.mN > 1.1)
-
 #Sets the threshold for the values that should be excluded from the plot (define outliers)
-
 summaryHold <- summaryData %>% 
   filter(phase == "hold") %>% 
   mutate(
@@ -50,53 +48,65 @@ summaryHold <- summaryData %>%
     )
   )
 
+summaryHold %>%
+  write_delim(paste0(processTime, "_summaryInclusions.txt"), '\t')
+print(paste("saved", paste0(processTime, "_summaryInclusions.txt")))
+
+Outlierstally <- summaryHold %>% 
+  group_by(outliers, targetForce.mN, PID) %>% 
+  tally()
+
+Outlierstally %>% 
+  filter(PID == "P08" | PID == "P09" | PID == "P04") %>% 
+  ggplot(mapping = aes(x = as.factor(targetForce.mN), y = n, fill = PID)) +
+  geom_col(position = position_dodge(0.6)) +
+  facet_grid(cols = vars(outliers))
+
+
 #Change includeTraces/excludeTraces depending on what to plot
-includeTraces <- summaryHold %>% 
+plotTraces <- summaryHold %>% 
   filter(outliers == "include") %>% 
   pull(sourceFile)
 
 
-overlayData_include <- overlayData %>% 
-  filter( !sourceFile %in% includeTraces )
+overlayData_toplot <- overlayData %>% 
+  filter( sourceFile %in% plotTraces )
 
-overlayData_include <- overlayData %>% 
-  filter( sourceFile %in% includeTraces )
+# FilesToCheck <- summaryHold %>% 
+#   filter(outliers == "include" & targetForce.mN == 1200) %>%  pull(sourceFile)
+# 
+# summaryHold%>% 
+#   dplyr::filter(sourceFile == FilesToCheck[4]) %>% 
+#   View()
 
-FilesToCheck <- summaryHold %>% 
-  filter(outliers == "include" & targetForce.mN == 1200) %>%  pull(sourceFile)
-
-summaryHold%>% 
-  dplyr::filter(sourceFile == FilesToCheck[4]) %>% 
-  View()
-
-checkData <- overlayData_include %>% 
-  dplyr::filter(sourceFile == FilesToCheck[4]) %>% 
-  mutate(
-    nfiles = n_distinct(sourceFile),
-    targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles),
-    
-    PID = sourceFile %>% 
-      str_extract("_P[0-9]+_") %>% 
-      str_remove_all("_")
-  )
-
-  
-checkData %>%
-    ggplot(aes(x = Time.ms/1000, y = Force.mN)) +
-    #facet_wrap(PID ~ targetForceLabel, ncol=9) +
-    geom_line(aes(group = sourceFile, colour = condition), size = 0.5, alpha = 0.4) +
-    labs(x = NULL, y = NULL)
+# checkData <- overlayData_toplot %>% 
+#   dplyr::filter(sourceFile == FilesToCheck[4]) %>% 
+#   mutate(
+#     nfiles = n_distinct(sourceFile),
+#     targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles),
+#     
+#     PID = sourceFile %>% 
+#       str_extract("_P[0-9]+_") %>% 
+#       str_remove_all("_")
+#   )
+# 
+#   
+# checkData %>%
+#     ggplot(aes(x = Time.ms/1000, y = Force.mN)) +
+#     #facet_wrap(PID ~ targetForceLabel, ncol=9) +
+#     geom_line(aes(group = sourceFile, colour = condition), size = 0.5, alpha = 0.4) +
+#     labs(x = NULL, y = NULL)
 
 
 
 #define if you want to plot included or excluded values
-rampforcecombo <- overlayData_include %>% 
+rampforcecombo <- overlayData_toplot %>% 
   group_by(targetForce.mN,targetRampTime.ms,sourceFile) %>%
   tally() %>% 
   xtabs( ~ targetForce.mN + targetRampTime.ms, .)
 
-ramps <- sort_unique(overlayData_include$targetRampTime.ms)
-forces <- sort_unique(overlayData_include$targetForce.mN)
+ramps <- sort_unique(overlayData_toplot$targetRampTime.ms)
+forces <- sort_unique(overlayData_toplot$targetForce.mN)
 # PIDs <- overlayData_exclude$sourceFile %>%
 #   str_extract("_P[0-9]+_") %>% 
 #   str_remove_all("_") %>% 
@@ -107,7 +117,7 @@ for (ramp_n in seq_along(ramps)) {
   # ramp_n <- 2
   # plotlist = list()
   for (force_n in seq_along(forces)) {
-    plotData <- overlayData_include %>% 
+    plotData <- overlayData_toplot %>% 
       dplyr::filter(targetRampTime.ms == ramps[ramp_n] & targetForce.mN == forces[force_n]) %>% 
       mutate(
         nfiles = n_distinct(sourceFile),

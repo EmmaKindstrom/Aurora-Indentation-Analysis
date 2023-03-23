@@ -4,22 +4,12 @@ library(patchwork)
 library(stringr)
 source('aurora functions.R')
 theme_set(theme_bw())
-
 #### this section specific to the data set ####
 
 # Reading in all ddf files
 dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
 #dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/12_ddf/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
-
-# # this excludes bad data files and also sorts into length and force based on text in the file names
-# sortedDataFiles <- tibble(filename = allDataFiles,
-#                           bad = case_when(!str_detect(filename,'(bad)' ~ 'goodfiles') )
-# )
-
-# if you edit the above, you need to end up with something called forceDataFiles, which is the list of data files you want to process
-# forceDataFiles <- sortedDataFiles %>% 
-#   dplyr::filter(type == 'goodfiles') %>% pull(filename)
 
 forceDataFiles <- allDataFiles
 
@@ -86,10 +76,23 @@ overlayDataFile <- paste0(outputFolder, 'force_overlay_data_',timenow,'.txt')
 outputPlotFolder <- paste0(outputFolder,'Force Plots ',timenow,'/')
 
 
+# Plot raw data frrom a single file (force trace)
+# weirddataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/Excluded_ddf/'
+# ddfFile <- paste0(dataFolder,"06_ddf/--film-shaved-aurora_2022-02-25_15-59-16_P06_800.0_10_25.ddf")
+# ddfFile <- paste0(weirddataFolder,"--film-shaved-aurora_2022-03-10_10-09-27_P17_film_400.0_20_73.ddf")
+# ddfFile <- paste0(weirddataFolder,"--film-shaved-aurora_2022-03-10_10-09-27_P17_film_600.0_10_73.ddf")
+# checkData <- ddfFile %>% read_delim('\t', skip = 25, col_types = paste0(rep('d',12), collapse = ''))
+# checkData %>%
+#   ggplot(aes(x = Sample, y = AI1)) +
+#   geom_line() +
+#   labs(x = NULL, y = NULL)
+
+
 overlayData <- tibble()
 # for (n in 1:1000) {
 for (n in seq_along(forceDataFiles)) {
   ddfFile <- paste0(dataFolder,forceDataFiles[n])
+  
   
   print(paste(n, 'of', length(forceDataFiles), ':', ddfFile))
   
