@@ -29,7 +29,23 @@ summaryData %>%
   facet_wrap( vars(PID), scales = "free") +
   geom_histogram(binwidth = 0.1)
 
+
 #Sets the threshold for the values that should be excluded from the plot (define outliers)
+
+summaryRamp <- summaryData %>% 
+  filter(phase == "ramp on") %>% 
+    mutate(
+      UpperRampThreshold = targetForce.mN*1.1
+    ) %>% 
+  mutate(
+    rampoutliers = if_else(
+      peakForce.mN < UpperRampThreshold,
+      "include",
+      "exclude",
+      "missing"
+    )
+  ) 
+
 summaryHold <- summaryData %>% 
   filter(phase == "hold") %>% 
   mutate(
@@ -37,7 +53,7 @@ summaryHold <- summaryData %>%
     LowerThreshold = targetForce.mN*0.9
   ) %>% 
   mutate(
-    outliers = if_else(
+    holdoutliers = if_else(
       peakForce.mN > LowerThreshold & peakForce.mN < UpperThreshold & 
       minimumForce.mN > LowerThreshold & minimumForce.mN < UpperThreshold &
       heldForce.mN > LowerThreshold & heldForce.mN < UpperThreshold,
@@ -48,23 +64,51 @@ summaryHold <- summaryData %>%
     )
   )
 
-summaryHold %>%
+#Joins hold outliers and ramp outliers 
+
+summaryRampHold <- full_join(
+  select(summaryRamp, c(sourceFile, condition, PID, rampoutliers)),
+  select(summaryHold, c(sourceFile, condition, PID, holdoutliers))
+)
+
+
+# Control if included in both phases
+
+RampHolddata <- summaryRampHold %>% 
+  mutate(
+    outliers = if_else(
+      rampoutliers == "include" &
+      holdoutliers == "include",
+    "include",
+    "exclude"
+    )
+  )
+
+
+#add outliers to original data set 
+summaryDataOutliers <- full_join(
+  RampHolddata,
+  summaryData
+)
+
+summaryDataOutliers %>%
   write_delim(paste0(processTime, "_summaryInclusions.txt"), '\t')
 print(paste("saved", paste0(processTime, "_summaryInclusions.txt")))
 
-Outlierstally <- summaryHold %>% 
+Outlierstally <- summaryDataOutliers %>% 
   group_by(outliers, targetForce.mN, PID) %>% 
   tally()
 
 Outlierstally %>% 
-  filter(PID == "P08" | PID == "P09" | PID == "P04") %>% 
+  filter(PID == "P01" | PID == "P02" | PID == "P03" | PID == "P05" | PID == "P06" | PID == "P07"| PID == "P08" | PID == "P09" | PID == "P10" | PID == "P11"| PID == "P04") %>% 
   ggplot(mapping = aes(x = as.factor(targetForce.mN), y = n, fill = PID)) +
   geom_col(position = position_dodge(0.6)) +
   facet_grid(cols = vars(outliers))
 
 
+
 #Change includeTraces/excludeTraces depending on what to plot
-plotTraces <- summaryHold %>% 
+plotTraces <- summaryDataOutliers %>% 
   filter(outliers == "include") %>% 
   pull(sourceFile)
 
@@ -114,18 +158,19 @@ forces <- sort_unique(overlayData_toplot$targetForce.mN)
 
 #change include to exclude to plot both datasets (compare to find a good upper and lower threshold)
 for (ramp_n in seq_along(ramps)) {
-  # ramp_n <- 2
+  #ramp_n <- 2
   # plotlist = list()
   for (force_n in seq_along(forces)) {
+   # force_n <- 2
     plotData <- overlayData_toplot %>% 
       dplyr::filter(targetRampTime.ms == ramps[ramp_n] & targetForce.mN == forces[force_n]) %>% 
+      mutate(PID = sourceFile %>% 
+                str_extract("_P[0-9]+_") %>% 
+                str_remove_all("_")) %>% 
+      group_by(PID) %>% 
       mutate(
         nfiles = n_distinct(sourceFile),
-        targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles),
-        
-        PID = sourceFile %>% 
-          str_extract("_P[0-9]+_") %>% 
-          str_remove_all("_")
+        targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles)
       )
     
     current_force_str <- toString(forces[force_n])

@@ -2,7 +2,8 @@ scale_and_filter <- function(ddfData, scaleUnits, SamplingRate, butterworthFilte
   ddfData %>% 
     mutate(Time.ms = 1000*Sample/SamplingRate,
            LengthMeasued.mm = AI0*scaleUnits[1], #V/mm AI0
-           ForceMeasured.mN = AI1*scaleUnits[2], #V/mN AI1
+           ForceMeasured.mN = AI1
+           *scaleUnits[2], #V/mN AI1
            LengthCommanded.mm = AO0*scaleUnits[9], #V/mm AO0
            ForceCommanded.mN = AO1*scaleUnits[10], #V/mN AO0
            LengthFiltered.mm = filtfilt(butterworthFilter, AI0)*scaleUnits[1],

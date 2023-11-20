@@ -4,13 +4,14 @@ library(patchwork)
 library(stringr)
 source('aurora functions.R')
 theme_set(theme_bw())
+install.packages('stringr')
 
 #### this section specific to the data set ####
 
 #dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
 
 dataFolder <- 'C:/Users/emmku74/Desktop/01_ddf/'
-dataFolder <- 'C:/Experiments/DDF/01_ddf/'
+dataFolder <- 'C:/Experiments/DDF/12_ddf/'
 dataFolder <- 'C:/Users/emmku74/Desktop/New folder/'
 dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
@@ -134,7 +135,7 @@ for (n in seq_along(forceDataFiles)) {
   #   str_replace(dataFolder,'') %>%
   #   str_replace_all('/','_') %>%
   #   paste0(outputPlotFolder,.) %>%
-  #   str_replace('\\.ddf', '\\.tiff')
+  #   str_replace('ddf', 'tiff')
   # 
   # if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
   # ggsave(plotFile)
@@ -165,7 +166,6 @@ for (ramp_n in seq_along(ramps)) {
       mutate(
         nfiles = n_distinct(sourceFile),
         targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles),
-        
         condition = sourceFile %>% 
           str_extract("_(film)|(shaved)_") %>% 
           str_remove_all("_"),
