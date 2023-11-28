@@ -10,7 +10,7 @@ theme_set(theme_bw())
 
 
 processedDataFolder <- './Processed Data/'
-processTime <- "20230220_120823"
+processTime <- "20231120_113246"
 overlayData <- read_tsv(paste0(processedDataFolder, "force_overlay_data_",processTime,".txt"))
 summaryData <- read_tsv(paste0(processedDataFolder, "force_summary_data_",processTime,".txt")) %>% 
   mutate(PID = sourceFile %>% 
@@ -254,8 +254,51 @@ for(currentfile in filelist) {
 # remove unnecessary part of filename
 data$filename <- str_remove(data$filename, "C:/Users/emmku74/Documents/GitHub/Aurora-Indentation-Analysis/Data_settings/film-shaved-aurora_")
 
-#combine ddf and csv files in the same table
-csv_ddf_data <- _join(RampHolddata, data)
+# Creating variables that can match between .csv and .ddf files
+
+RampHolddata$presentation <- RampHolddata$sourceFile %>% 
+  str_extract("\\.0_[0-9]{2,4}_") %>%
+  str_remove("\\.0_") %>% 
+  str_remove("0_") %>% 
+  as.integer()
+
+RampHolddata <- RampHolddata %>% 
+ mutate(trial.number = floor((presentation+1)/2)) 
+
+RampHolddata$trial.number <- floor((RampHolddata$presentation+1)/2) 
+
+RampHolddata$time.stamp <- RampHolddata$sourceFile %>% 
+  str_extract("[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}")
+
+data$time.stamp <- data$filename %>% 
+  str_extract("[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}")
+
+
+csv_data_with_outliers <- full_join(
+  select(RampHolddata, time.stamp, condition, PID, outliers, presentation, trial.number),
+  select(data, time.stamp, condition, PID, trial.number, standard, comparison, comparison.more.intense, presentation.order, response)
+)
+
+# turn it into a function --> still in progress
+
+csv_data_with_outliers %>% 
+  group_by(time.stamp, condition, PID, presentation, trial.number, standard, comparison, comparison.more.intense, presentation.order, response) %>% 
+  summarize(out = outfun(csv_data_with_outliers$outliers))
+  
+
+outfun <- function(o) if(csv_data_with_outliers$outliers == "exclude"){
+  Out <- ("exclude")} else {Out <- ("include")}
+
+group_by(PID, )
+
+if(csv_data_with_outliers$)
+
+
+
+
+csv_data_with_outliers <- full_join(data, csv_ddf_data) %>% 
+  filter(csv_data_with_outliers$outliers == "include")
+
 
 
 # exclusions (comment out and enter file name + trial number)
@@ -268,7 +311,7 @@ csv_ddf_data <- _join(RampHolddata, data)
 
 
 # simple figure to check the data
-ggplot(csv_ddf_data, aes(x = comparison, y = comparison.more.intense, colour = condition)) +
+ggplot(csv_data_with_outliers, aes(x = comparison, y = comparison.more.intense, colour = condition)) +
   stat_summary(geom = 'point', fun = 'mean') +
   facet_wrap(. ~ PID, scales = 'free') + # comment out to create a graph that contains all the participants together (mean of all trials)
   scale_y_continuous(limits = c(0,1))
@@ -276,16 +319,17 @@ ggplot(csv_ddf_data, aes(x = comparison, y = comparison.more.intense, colour = c
 # fit psychometric functions
 #shaved_only_data <- filter(data, condition == "shaved")
 fit <- quickpsy(
-  d = csv_ddf_data, 
+  d = csv_data_with_outliers, 
   x = comparison, 
   k = comparison.more.intense,
-  grouping = .(condition, PID, outliers),
+  grouping = .(condition, PID),
   # parini = c(250, 2000),
   log = TRUE,
   fun = cum_normal_fun,
   B = 100, # 10 or 100 for testing code, 10000 once everything is working, it will take time
   ci = 0.95
 )
+
 # plot  psychometric functions
 theme_set(theme_bw(base_size = 14))
 
