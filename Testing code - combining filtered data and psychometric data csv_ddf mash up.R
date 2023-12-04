@@ -279,27 +279,16 @@ csv_data_with_outliers <- full_join(
   select(data, time.stamp, condition, PID, trial.number, standard, comparison, comparison.more.intense, presentation.order, response)
 )
 
+
 # turn it into a function --> still in progress
+outfun <- function(outliers){
+  if (any(str_detect(outliers, "exclude"))) {out = "exclude"} else {(out = "include")} 
+  return(out)
+}
 
-csv_data_with_outliers %>% 
-  group_by(time.stamp, condition, PID, presentation, trial.number, standard, comparison, comparison.more.intense, presentation.order, response) %>% 
-  summarize(out = outfun(csv_data_with_outliers$outliers))
-  
-
-outfun <- function(o) if(csv_data_with_outliers$outliers == "exclude"){
-  Out <- ("exclude")} else {Out <- ("include")}
-
-group_by(PID, )
-
-if(csv_data_with_outliers$)
-
-
-
-
-csv_data_with_outliers <- full_join(data, csv_ddf_data) %>% 
-  filter(csv_data_with_outliers$outliers == "include")
-
-
+csv_data_psych <- csv_data_with_outliers %>% 
+  group_by(time.stamp, condition, PID, trial.number, standard, comparison, comparison.more.intense, presentation.order, response) %>% 
+  summarise(outliers = outfun(outliers)) 
 
 # exclusions (comment out and enter file name + trial number)
 # data <- data %>%
@@ -308,21 +297,27 @@ csv_data_with_outliers <- full_join(data, csv_ddf_data) %>%
 #       !(str_detect(filename,"2022-02-21_16-09-28") & trial.number ==8)
 #     )
 
-
+csv_data_psych %>% 
+  ungroup() %>% 
+  mutate(PID = as.factor(PID), comparison = as.factor(comparison), condition = as.factor(condition), outliers = as.factor(outliers)) %>% 
+  group_by(PID, comparison, condition, outliers, .drop = FALSE) %>% 
+  tally() %>% 
+  filter(PID == "P08")
+  filter(n == 0)
 
 # simple figure to check the data
-ggplot(csv_data_with_outliers, aes(x = comparison, y = comparison.more.intense, colour = condition)) +
-  stat_summary(geom = 'point', fun = 'mean') +
+ggplot(csv_data_psych, aes(x = comparison, y = comparison.more.intense, colour = condition, shape = outliers)) +
+  stat_summary(geom = 'point', fun = 'mean', alpha = .5, size = 2) +
   facet_wrap(. ~ PID, scales = 'free') + # comment out to create a graph that contains all the participants together (mean of all trials)
   scale_y_continuous(limits = c(0,1))
 
 # fit psychometric functions
 #shaved_only_data <- filter(data, condition == "shaved")
 fit <- quickpsy(
-  d = csv_data_with_outliers, 
+  d = csv_data_psych, 
   x = comparison, 
   k = comparison.more.intense,
-  grouping = .(condition, PID),
+  grouping = .(condition, PID, outliers),
   # parini = c(250, 2000),
   log = TRUE,
   fun = cum_normal_fun,
