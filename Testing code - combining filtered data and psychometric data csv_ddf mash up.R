@@ -5,6 +5,7 @@ library(stringr)
 library(ggplot2)
 library(tidyverse)
 library(patchwork)
+library(plotly)
 source('aurora functions.R')
 theme_set(theme_bw())
 
@@ -34,6 +35,9 @@ summaryData %>%
   geom_histogram(binwidth = 0.1)
 
 
+
+
+
 #Sets the threshold for the values that should be excluded from the plot (define outliers)
 
 summaryRamp <- summaryData %>% 
@@ -53,8 +57,8 @@ summaryRamp <- summaryData %>%
 summaryHold <- summaryData %>% 
   filter(phase == "hold") %>% 
   mutate(
-    UpperThreshold = targetForce.mN*1.1,
-    LowerThreshold = targetForce.mN*0.9
+    UpperThreshold = targetForce.mN*1.2,
+    LowerThreshold = targetForce.mN*0.1
   ) %>% 
   mutate(
     holdoutliers = if_else(
@@ -98,18 +102,6 @@ summaryDataOutliers <- full_join(
 summaryDataOutliers %>%
   write_delim(paste0(processTime, "_summaryInclusions.txt"), '\t')
 print(paste("saved", paste0(processTime, "_summaryInclusions.txt")))
-
-Outlierstally <- summaryDataOutliers %>% 
-  group_by(outliers, targetForce.mN, PID) %>% 
-  tally()
-
-Outlierstally %>% 
-  filter(PID == "P01" | PID == "P02" | PID == "P03" | PID == "P05" | PID == "P06" | PID == "P07"| PID == "P08" | PID == "P09" | PID == "P10" | PID == "P11"| PID == "P04") %>% 
-  ggplot(mapping = aes(x = as.factor(targetForce.mN), y = n, fill = PID)) +
-  geom_col(position = position_dodge(0.6)) +
-  facet_grid(cols = vars(outliers))
-
-
 
 # Change includeTraces/excludeTraces depending on what to plot
 plotTraces <- summaryDataOutliers %>% 
@@ -172,6 +164,7 @@ for (ramp_n in seq_along(ramps)) {
                str_extract("_P[0-9]+_") %>% 
                str_remove_all("_")) %>% 
       group_by(PID) %>% 
+      #filter(PID == "P08") %>% 
       mutate(
         nfiles = n_distinct(sourceFile),
         targetForceLabel = paste0('t=',targetForce.mN,'mN, n=',nfiles)
@@ -212,6 +205,7 @@ for (ramp_n in seq_along(ramps)) {
   }
 }
 
+ggplotly(force.trace)
 
 #### Data analysis psychophysics ####
 
@@ -302,8 +296,19 @@ csv_data_psych %>%
   mutate(PID = as.factor(PID), comparison = as.factor(comparison), condition = as.factor(condition), outliers = as.factor(outliers)) %>% 
   group_by(PID, comparison, condition, outliers, .drop = FALSE) %>% 
   tally() %>% 
-  filter(PID == "P08")
+  filter(PID == "P08") %>% 
   filter(n == 0)
+  
+Outlierstally <- csv_data_psych %>% 
+  group_by(outliers, comparison, PID, condition) %>% 
+  filter(PID == "P08") %>% 
+  tally()
+
+Outlierstally %>% 
+  filter(PID == "P08") %>% 
+  ggplot(mapping = aes(x = as.factor(comparison), y = n, fill = condition)) +
+  geom_col(position = position_dodge(0.6)) +
+  facet_grid(cols = vars(outliers))   
 
 # simple figure to check the data
 ggplot(csv_data_psych, aes(x = comparison, y = comparison.more.intense, colour = condition, shape = outliers)) +
@@ -311,19 +316,27 @@ ggplot(csv_data_psych, aes(x = comparison, y = comparison.more.intense, colour =
   facet_wrap(. ~ PID, scales = 'free') + # comment out to create a graph that contains all the participants together (mean of all trials)
   scale_y_continuous(limits = c(0,1))
 
+
+x <- 4
+x %>% y <- mean(x)
+
 # fit psychometric functions
 #shaved_only_data <- filter(data, condition == "shaved")
 fit <- quickpsy(
-  d = csv_data_psych, 
+  d = filter(csv_data_psych, outliers == "include"), #PID != "P04"), #PID == "P03" | PID == "P08"), 
   x = comparison, 
   k = comparison.more.intense,
-  grouping = .(condition, PID, outliers),
+  grouping = .(condition, PID),
   # parini = c(250, 2000),
   log = TRUE,
   fun = cum_normal_fun,
-  B = 100, # 10 or 100 for testing code, 10000 once everything is working, it will take time
+  B = 10, # 10 or 100 for testing code, 10000 once everything is working, it will take time
   ci = 0.95
 )
+
+csv_data_psych %>% 
+  group_by(PID, outliers, condition, .drop = FALSE) %>% 
+  tally()
 
 # plot  psychometric functions
 theme_set(theme_bw(base_size = 14))
@@ -333,9 +346,11 @@ xbreaks <- unique(data$comparison)
 # quartz() #mac os
 windows() # windows
 plot(fit) + 
+  facet_wrap(. ~ PID, scales = 'free') + # comment out to create a graph that contains all the participants together (mean of all trials)
   scale_x_continuous(breaks = xbreaks) +
   geom_vline(xintercept = 600, linetype = 'dotted') +
-  labs(x = "comparison force (mN)", y = "Proporion called more intense")
+  labs(x = "comparison force (mN)", y = "Proporion called more intense") +
+  coord_cartesian(xlim = c(min(xbreaks), max(xbreaks)))
 
 ggsave("csv_ddf_psychfuns.pdf")
 

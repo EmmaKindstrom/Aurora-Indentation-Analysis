@@ -5,6 +5,7 @@ source('aurora functions.R')
 theme_set(theme_bw())
 
 dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
+dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 sortedDataFiles <- tibble(filename = allDataFiles,
                           type = case_when(
@@ -20,6 +21,7 @@ timenow <- format(Sys.time(), '%Y%m%d_%H%M%S')
 outputDataFile <- paste0(outputFolder, 'force_data_',timenow,'.txt')
 outputPlotFolder <- paste0(outputFolder,'Force Plots ',timenow,'/')
 outputTracesFolder <- paste0(outputFolder,'Force Overlay ',timenow,'/')
+
 
 overlayData <- tibble()
 for (n in seq_along(forceDataFiles)) {
@@ -129,6 +131,8 @@ for (n in seq_along(forceDataFiles)) {
   dev.off()
 }
 
+### have this v ####
+
 overlayData %>% 
   group_by(targetForce.mN,targetRampTime.ms,sourceFile) %>% 
   tally() %>% 
@@ -136,6 +140,7 @@ overlayData %>%
 
 ramps <- sort_unique(overlayData$targetRampTime.ms)
 forces <- sort_unique(overlayData$targetForce.mN)
+
 
 for (rampN in seq_along(ramps)) {
   plotlist = list()
