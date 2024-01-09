@@ -8,15 +8,44 @@ scale_and_filter <- function(ddfData, scaleUnits, SamplingRate, butterworthFilte
            ForceCommanded.mN = AO1*scaleUnits[10], #V/mN AO0
            LengthFiltered.mm = filtfilt(butterworthFilter, AI0)*scaleUnits[1],
            ForceFiltered.mN = filtfilt(butterworthFilter, AI1)*scaleUnits[2],
-           LengthDeriv.mps = c(NA,diff(LengthFiltered.mm)/diff(Time.ms)),
+           # don't need to conver to seconds because it is in mm and mN
+           LengthDeriv.mps = c(NA,diff(LengthFiltered.mm)/diff(Time.ms)), 
            ForceDeriv.Nps = c(NA,diff(ForceFiltered.mN)/diff(Time.ms))
     ) %>% 
+    mutate(
+      # now we do neeed to convert to seconds because it is already in N/s and m/s
+      LengthDeriv2.mpss = c(NA,diff(LengthDeriv.mps)/(diff(Time.ms)*1000)),
+      ForceDeriv2.Npss = c(NA,diff(ForceDeriv.Nps)/(diff(Time.ms)*1000))
+    )  %>% 
     select(c(Time.ms, LengthFiltered.mm, ForceFiltered.mN, 
              LengthMeasued.mm, ForceMeasured.mN, 
              LengthCommanded.mm, ForceCommanded.mN,
-             LengthDeriv.mps, ForceDeriv.Nps))
+             LengthDeriv.mps, ForceDeriv.Nps,
+             LengthDeriv2.mpss, ForceDeriv2.Npss))
 }
 
+
+max_n <- function(x, n = 1) {
+  values <- x[order(x, decreasing = TRUE)][1:n]
+  which(x %in% values)
+} 
+
+find_peaks <- function (x, m = 3, n = length(x)){
+  # modified from https://stats.stackexchange.com/a/164830
+  shape <- diff(sign(diff(x, na.pad = FALSE)))
+  pks <- sapply(which(shape < 0), FUN = function(i){
+    z <- i - m + 1
+    z <- ifelse(z > 0, z, 1)
+    w <- i + m + 1
+    w <- ifelse(w < length(x), w, length(x))
+    if(all(x[c(z : i, (i + 2) : w)] <= x[i + 1])) return(i + 1) else return(numeric(0))
+  })
+  pks <- unlist(pks)
+  pks
+  pks[max_n(x[pks],n)]
+}
+
+  
 plot_ddf_data <- function(ddfData, channels = c('AI0', 'AI1', 'AO0', 'AO1')) {
   ddfData %>%
     select(c('Sample',channels)) %>%
@@ -88,7 +117,6 @@ read_length_protocol <- function(file, skip, n_max) {
 }
 
 find_ramps <- function(scaledData, ptcl, channel, threshold) {
-  
   find_window <- function(scaledData,channel,threshold,direction) {
     win <- tibble()
     tr <- threshold*0.5
