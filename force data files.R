@@ -4,19 +4,12 @@ library(patchwork)
 source('aurora functions.R')
 theme_set(theme_bw())
 
-dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
+# dataFolder <- "~/Library/CloudStorage/OneDrive-SharedLibraries-Linköpingsuniversitet/Emma Kindström - DDF/"
 dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
-sortedDataFiles <- tibble(filename = allDataFiles,
-                          type = case_when(
-                            !str_detect(filename,'(length)|(Velocity)|(bad)|(dont use)|([0-9]v)') ~ 'force',
-                            !str_detect(filename,'(force)|(Force)|(bad)|(dont use)') ~ 'length'
-                            )
-                          )
-forceDataFiles <- sortedDataFiles %>% 
-  dplyr::filter(type == 'force') %>% pull(filename)
+forceDataFiles <- tibble(filename = allDataFiles) %>% pull(filename)
 
-outputFolder <- '../Processed Data/'
+outputFolder <- 'Processed Data/'
 timenow <- format(Sys.time(), '%Y%m%d_%H%M%S')
 outputDataFile <- paste0(outputFolder, 'force_data_',timenow,'.txt')
 outputPlotFolder <- paste0(outputFolder,'Force Plots ',timenow,'/')
@@ -25,7 +18,7 @@ outputTracesFolder <- paste0(outputFolder,'Force Overlay ',timenow,'/')
 
 overlayData <- tibble()
 for (n in seq_along(forceDataFiles)) {
-# for (n in 211:356) {
+# for (n in 21:30) {
   ddfFile <- paste0(dataFolder,forceDataFiles[n])
   
   print(paste(n, 'of', length(forceDataFiles), ':', ddfFile))
@@ -50,38 +43,17 @@ for (n in seq_along(forceDataFiles)) {
     scale_and_filter(scaleUnits, SamplingRate, butterworthFilter) %>% 
     dplyr::filter(Time.ms %>% between(ptcl$stimWindowStart, ptcl$stimWindowEnd))
   
-  # find where the force ramps are
-  
-  # define windows to look for peaks and valleys
-  rampOnData <- scaledData %>% 
-    dplyr::filter(Time.ms %>% between(ptcl$rampOn, ptcl$hold + 50))
-  
-  rampOffData <- scaledData %>% 
-    dplyr::filter(Time.ms %>% between(ptcl$rampOff, ptcl$endStim + 50))
-
-   # first find the biggest (5) peaks and valleys in 2nd derivative
-  on_peaks_idx <- find_peaks(rampOnData$ForceDeriv2.Npss, n = 3)
-  on_peaks <- rampOnData$Time.ms[on_peaks_idx]
-  on_valleys_idx <- find_peaks(-rampOnData$ForceDeriv2.Npss, n = 3)
-  on_valleys <- rampOnData$Time.ms[on_valleys_idx]
-  
-  off_peaks_idx <- find_peaks(rampOffData$LengthDeriv2.mpss, n = 3)
-  off_peaks <- rampOffData$Time.ms[off_peaks_idx]
-  off_valleys_idx <- find_peaks(-rampOffData$LengthDeriv2.mpss, n = 3)
-  off_valleys <- rampOffData$Time.ms[off_valleys_idx]
-  
-  # now find the first/last peaks and valleys within the windows
-  forceRamps <- list(
-    OnStart = min(on_peaks), # first peak 
-    OnStop = max(on_valleys), # last valley
-    OffStart = min(off_valleys), # first valley 
-    OffStop = max(off_peaks) # last peak
+  # use the protocol times to divide into different phases
+  protocolPhases <- list(
+    OnStart = ptcl$rampOn,
+    OnStop = ptcl$hold,
+    OffStart = ptcl$rampOff,
+    OffStop = ptcl$endStim
   )
-  
-  
+    
   # save summary data
   summaryData <- scaledData %>%
-    summarise_data(ramps = forceRamps) %>% 
+    summarise_data(ramps = protocolPhases) %>% 
     mutate(targetForce.mN = ptcl$targetForce.mN,
            targetRampTime.ms = ptcl$rampOnDuration.ms,
            positionLimit.mm = ptcl$lengthLimit.mm,
@@ -105,37 +77,35 @@ for (n in seq_along(forceDataFiles)) {
   )
   
   summaryData %>% 
-    write_delim(paste0(outputDataFile), '\t', append = n>1)
+    write_delim(outputDataFile, '\t', append = n>1)
   print(paste("added data to", outputDataFile))
   
-  windows()
+    
+  #windows()
+  quartz()
   
   scaledData %>%
     ggplot(aes(x = Time.ms)) +
-    geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
-    geom_vline(xintercept = unlist(forceRamps), colour = 'orange') +
+    geom_vline(xintercept = unlist(protocolPhases), colour = 'orange') +
     geom_point(aes(y = ForceMeasured.mN), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
     geom_point(aes(y = ForceFiltered.mN), colour = 'blue', size = 1) +
     labs(title = 'Force trace', x = NULL, y = 'Force (mN)') -> force.trace
  
   scaledData %>%
     ggplot(aes(x = Time.ms)) +
-    geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
+    geom_vline(xintercept = unlist(protocolPhases), colour = 'orange') +
     geom_point(aes(y = ForceDeriv.Nps), colour = 'blue', size = 1) +
     labs(title = 'Force derivative', x = NULL, y = 'Force rate (N/s)') -> force.deriv
   
   scaledData %>%
     ggplot(aes(x = Time.ms)) +
-    geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
-    geom_vline(xintercept = c(on_peaks, off_peaks), colour = 'red') +
-    geom_vline(xintercept = c(on_valleys, off_valleys), colour = 'darkgreen') +
+    geom_vline(xintercept = unlist(protocolPhases), colour = 'orange') +
     geom_point(aes(y = ForceDeriv2.Npss), colour = 'blue', size = 1) +
     labs(title = 'Force 2nd derivative', x = NULL, y = 'Force acceleration (N/s^2)') -> force.deriv2
 
   scaledData %>%
     ggplot(aes(x = Time.ms)) +
-    geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
-    geom_vline(xintercept = unlist(forceRamps), colour = 'orange') +
+    geom_vline(xintercept = unlist(protocolPhases), colour = 'orange') +
     geom_point(aes(y = LengthMeasued.mm), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
     geom_point(aes(y = LengthFiltered.mm), colour = 'purple', size = 1) +
     labs(title = paste('Displacement trace, limit =', ptcl$lengthLimit.mm, 'mm'),
@@ -143,13 +113,13 @@ for (n in seq_along(forceDataFiles)) {
   
   scaledData %>%
     ggplot(aes(x = Time.ms)) +
-    geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
+    geom_vline(xintercept = unlist(protocolPhases), colour = 'orange') +
     geom_point(aes(y = LengthDeriv.mps), colour = 'purple', size = 1) +
     labs(title = 'Displacement derivative', x = NULL, y = 'Velocity (m/s)') -> disp.deriv
   
   scaledData %>%
     ggplot(aes(x = Time.ms)) +
-    geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
+    geom_vline(xintercept = unlist(protocolPhases), colour = 'orange') +
     geom_point(aes(y = LengthDeriv2.mpss), colour = 'purple', size = 1) +
     labs(title = 'Displacement 2nd derivative', x = 'Time (ms)', y = 'Acceleration (m/s^2)') -> disp.deriv2
   
@@ -158,12 +128,11 @@ for (n in seq_along(forceDataFiles)) {
                                   ptcl$rampOnDuration.ms,'ms ramp.',
                                   'Low pass butterworth filter',FilterFreqCutOff,'Hz'))
   
-  
   plotFile <- ddfFile %>%
     str_replace(dataFolder,'') %>%
     str_replace_all('/','_') %>%
     paste0(outputPlotFolder,.) %>%
-    str_replace('ddf', 'tiff')
+    str_replace('\\.ddf', '\\.tiff')
   
   if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
   ggsave(plotFile, width = 10, height = 10)
