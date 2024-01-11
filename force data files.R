@@ -81,8 +81,8 @@ for (n in seq_along(forceDataFiles)) {
   print(paste("added data to", outputDataFile))
   
     
-  #windows()
-  quartz()
+  windows()
+  #quartz()
   
   scaledData %>%
     ggplot(aes(x = Time.ms)) +
