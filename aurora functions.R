@@ -8,12 +8,12 @@ scale_and_filter <- function(ddfData, scaleUnits, SamplingRate, butterworthFilte
            ForceCommanded.mN = AO1*scaleUnits[10], #V/mN AO0
            LengthFiltered.mm = filtfilt(butterworthFilter, AI0)*scaleUnits[1],
            ForceFiltered.mN = filtfilt(butterworthFilter, AI1)*scaleUnits[2],
-           # don't need to conver to seconds because it is in mm and mN
+           # don't need to convert to seconds because it is in mm and mN
            LengthDeriv.mps = c(NA,diff(LengthFiltered.mm)/diff(Time.ms)), 
            ForceDeriv.Nps = c(NA,diff(ForceFiltered.mN)/diff(Time.ms))
     ) %>% 
     mutate(
-      # now we do neeed to convert to seconds because it is already in N/s and m/s
+      # now we do need to convert to seconds because it is already in N/s and m/s
       LengthDeriv2.mpss = c(NA,diff(LengthDeriv.mps)/(diff(Time.ms)*1000)),
       ForceDeriv2.Npss = c(NA,diff(ForceDeriv.Nps)/(diff(Time.ms)*1000))
     )  %>% 
@@ -23,12 +23,6 @@ scale_and_filter <- function(ddfData, scaleUnits, SamplingRate, butterworthFilte
              LengthDeriv.mps, ForceDeriv.Nps,
              LengthDeriv2.mpss, ForceDeriv2.Npss))
 }
-
-
-max_n <- function(x, n = 1) {
-  values <- x[order(x, decreasing = TRUE)][1:n]
-  which(x %in% values)
-} 
 
 find_peaks <- function (x, m = 3, n = length(x)){
   # modified from https://stats.stackexchange.com/a/164830
@@ -41,7 +35,12 @@ find_peaks <- function (x, m = 3, n = length(x)){
     if(all(x[c(z : i, (i + 2) : w)] <= x[i + 1])) return(i + 1) else return(numeric(0))
   })
   pks <- unlist(pks)
-  pks
+  
+  max_n <- function(x, n = 1) {
+    values <- x[order(x, decreasing = TRUE)][1:n]
+    which(x %in% values)
+  } 
+  
   pks[max_n(x[pks],n)]
 }
 
@@ -75,6 +74,7 @@ read_force_protocol <- function(file, skip, n_max) {
     endStim = rampOff + protocolData$Window.sec[3]*1000,
     endRecording = endStim + (protocolData$Wait.sec[4]+protocolData$Window.sec[4]+protocolData$Wait.sec[5])*1000,
     rampOnDuration.ms = hold - rampOn,
+    targetForceRate.Nps = protocolData$Target[2] / rampOnDuration.ms,
     holdDuration.ms = rampOff - hold,
     rampOffDuration.ms = endStim - rampOff,
     padding = min(500, max(50,0.2*(rampOnDuration.ms + holdDuration.ms + rampOffDuration.ms))),
