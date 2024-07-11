@@ -11,7 +11,7 @@ install.packages('stringr')
 #dataFolder <- 'C:/Users/sarmc72/OneDrive - Linköpings universitet/projects - in progress/Peripheral speed force/MNG experiment/Aurora data/'
 
 dataFolder <- 'C:/Users/emmku74/Desktop/01_ddf/'
-dataFolder <- 'C:/Experiments/DDF/12_ddf/'
+dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/02_ddf/'
 dataFolder <- 'C:/Users/emmku74/Desktop/New folder/'
 dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
@@ -96,53 +96,56 @@ for (n in seq_along(forceDataFiles)) {
     write_delim(paste0(outputDataFile), '\t', append = n>1)
   print(paste("added data to", outputDataFile))
   
-  # windows()
-  # 
-  # scaledData %>%
-  #   ggplot(aes(x = Time.ms)) +
-  #   geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
-  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
-  #   geom_point(aes(y = ForceMeasured.mN), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
-  #   geom_point(aes(y = ForceFiltered.mN), colour = 'blue', size = 1) +
-  #   labs(title = 'Force trace', x = 'Time (ms)', y = 'Force (mN)') -> force.trace
-  # 
-  # scaledData %>%
-  #   ggplot(aes(x = Time.ms)) +
-  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
-  #   geom_point(aes(y = ForceDeriv.Nps), colour = 'blue', size = 1) +
-  #   labs(title = 'Force derivative', x = 'Time (ms)', y = 'Force rate (N/s)') -> force.deriv
-  # 
-  # scaledData %>%
-  #   ggplot(aes(x = Time.ms)) +
-  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
-  #   geom_point(aes(y = LengthMeasued.mm), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
-  #   geom_point(aes(y = LengthFiltered.mm), colour = 'purple', size = 1) +
-  #   labs(title = paste('Displacement trace, limit =', ptcl$lengthLimit.mm, 'mm'),
-  #        x = 'Time (ms)', y = 'Displacement (mm)') -> disp.trace
-  # 
-  # scaledData %>%
-  #   ggplot(aes(x = Time.ms)) +
-  #   geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
-  #   geom_point(aes(y = LengthDeriv.mps), colour = 'purple', size = 1) +
-  #   labs(title = 'Displacement derivative', x = 'Time (ms)', y = 'Velocity (m/s)') -> disp.deriv
-  # 
-  # force.trace / force.deriv / disp.trace / disp.deriv +
-  #   plot_annotation(title = paste('Target =', ptcl$targetForce.mN,'mN.',
-  #                                 ptcl$rampOnDuration.ms,'ms ramp.',
-  #                                 'Low pass butterworth filter',FilterFreqCutOff,'Hz'))
-  # 
-  # plotFile <- ddfFile %>%
-  #   str_replace(dataFolder,'') %>%
-  #   str_replace_all('/','_') %>%
-  #   paste0(outputPlotFolder,.) %>%
-  #   str_replace('ddf', 'tiff')
-  # 
-  # if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
-  # ggsave(plotFile)
-  # print(paste('saved figure:',plotFile))
-  # 
-  # dev.off()
+#### this might be the force traces ###
+ windows()
+
+scaledData %>%
+  ggplot(aes(x = Time.ms)) +
+  geom_vline(xintercept = c(ptcl$rampOn,ptcl$hold,ptcl$rampOff,ptcl$endStim), colour = 'grey') +
+  geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+  geom_point(aes(y = ForceMeasured.mN), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
+  geom_point(aes(y = ForceFiltered.mN), colour = 'blue', size = 1) +
+  labs(title = 'Force trace', x = 'Time (ms)', y = 'Force (mN)') -> force.trace
+
+  scaledData %>%
+    ggplot(aes(x = Time.ms)) +
+    geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+    geom_point(aes(y = ForceDeriv.Nps), colour = 'blue', size = 1) +
+    labs(title = 'Force derivative', x = 'Time (ms)', y = 'Force rate (N/s)') -> force.deriv
+
+  scaledData %>%
+    ggplot(aes(x = Time.ms)) +
+    geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+    geom_point(aes(y = LengthMeasued.mm), shape = 21, fill = 'black', alpha = 0.1, size = 3) +
+    geom_point(aes(y = LengthFiltered.mm), colour = 'purple', size = 1) +
+    labs(title = paste('Displacement trace, limit =', ptcl$lengthLimit.mm, 'mm'),
+         x = 'Time (ms)', y = 'Displacement (mm)') -> disp.trace
+
+  scaledData %>%
+    ggplot(aes(x = Time.ms)) +
+    geom_vline(xintercept = unlist(forceRamps), colour = 'red') +
+    geom_point(aes(y = LengthDeriv.mps), colour = 'purple', size = 1) +
+    labs(title = 'Displacement derivative', x = 'Time (ms)', y = 'Velocity (m/s)') -> disp.deriv
+
+  force.trace / force.deriv / disp.trace / disp.deriv +
+    plot_annotation(title = paste('Target =', ptcl$targetForce.mN,'mN.',
+                                  ptcl$rampOnDuration.ms,'ms ramp.',
+                                  'Low pass butterworth filter',FilterFreqCutOff,'Hz'))
+
+  plotFile <- ddfFile %>%
+    str_replace(dataFolder,'') %>%
+    str_replace_all('/','_') %>%
+    paste0(outputPlotFolder,.) %>%
+    str_replace('ddf', 'tiff')
+
+  if (!dir.exists(file.path(dirname(plotFile))) ) dir.create(file.path(dirname(plotFile)), recursive = TRUE)
+  ggsave(plotFile)
+  print(paste('saved figure:',plotFile))
+
+  dev.off()
 }
+#### Til here ###
+
 
 #read about group_by and see if you can  
 rampforcecombo <- overlayData %>% 

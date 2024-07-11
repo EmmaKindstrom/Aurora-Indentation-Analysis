@@ -30,6 +30,83 @@ summaryData %>%
   geom_histogram(binwidth = 0.1)
 
 
+
+####### Add meanhold/targetforce and calc distribution to have more data for exclusion/inclusion
+
+#Find peak peak force (across phases)
+summaryDataNoPhase <- summaryData %>% 
+  group_by(sourceFile) %>% 
+  summarize(peakForce.mN = max(peakForce.mN), targetForce.mN = targetForce.mN[1], 
+            distribution = peakForce.mN/targetForce.mN[1],
+            outliers = if_else(
+              distribution < 0.75 | distribution > 1.25,
+              "exclude",
+              "include",
+              missing = "missing"
+            )
+  ) 
+
+summaryDataNoPhase %>% 
+  group_by(outliers) %>% 
+  tally()
+
+
+
+# Force distribution plot
+
+Dist_Force <- summaryDataNoPhase %>% 
+  ggplot(mapping = aes(x = peakForce.mN/targetForce.mN)) +
+  #facet_wrap( vars(targetForce.mN), scales = "free") +
+  geom_histogram(binwidth = 0.1, fill = "purple", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Force",
+       x = "Standardized Peak Target",
+       y = "Frequency") +
+  scale_x_continuous(limits = c(0.5, 1.5))
+
+# Inclusion
+
+summaryDataNoPhase %>% 
+  mutate(
+    outliers = if_else(
+      distribution < 0.75 | distribution > 1.25,
+      "exclude",
+      "include",
+      missing = "missing"
+    )
+  ) 
+
+
+# Standard deviation force & force rate
+# 
+# sd_data <- summaryData %>%
+#   group_by(targetForce.mN) %>%
+#   summarise(SDpeakforce = sd(peakForce.mN, na.rm = TRUE))
+# 
+# ggplot(sd_data, aes(x = SDpeakforce)) +
+#   geom_density(fill = "skyblue", color = "black", alpha = 1) +
+#   labs(title = "Distribution of Standard Deviations",
+#        x = "Standard Deviation of peakForce.mN",
+#        y = "Density") +
+#   theme_minimal() +
+#   scale_x_continuous(limits = c(-50, max(sd_data$SDpeakforce) + 400))
+# 
+# 
+# ggplot(sd_data, aes(x = targetForce.mN, y = SDpeakforce)) +
+#   geom_bar(stat = "identity", fill = "skyblue", color = "black") +
+#   labs(title = "Standard Deviation by Group",
+#        x = "peakForce.mN",
+#        y = "Standard Deviation") +
+#   theme_minimal()
+# 
+# summaryData %>% 
+#   filter(phase == "peakForce.mN") %>% 
+#   ggplot(mapping = aes(x = sd(peakForce.mN, na.rm = FALSE))) +
+#   facet_wrap(vars(PID), scales = "free") +
+#   geom_histogram((binwidth = 0.1))
+# 
+# SDpeakforce <- sd(summaryData$peakForce.mN, na.rm = FALSE)
+
+
 #Sets the threshold for the values that should be excluded from the plot (define outliers)
 
 summaryRamp <- summaryData %>% 

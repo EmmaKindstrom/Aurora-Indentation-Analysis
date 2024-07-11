@@ -5,7 +5,7 @@ source('aurora functions.R')
 theme_set(theme_bw())
 
 # dataFolder <- "~/Library/CloudStorage/OneDrive-SharedLibraries-Linköpingsuniversitet/Emma Kindström - DDF/"
-dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/'
+dataFolder <- 'C:/Users/emmku74/OneDrive - Linköpings universitet/film-shaved-aurora/DDF/18_ddf/'
 allDataFiles <- list.files(dataFolder, 'ddf', recursive = TRUE)
 forceDataFiles <- tibble(filename = allDataFiles) %>% pull(filename)
 
