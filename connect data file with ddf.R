@@ -77,11 +77,11 @@ fit <- quickpsy(
   # parini = c(250, 2000),
   log = TRUE,
   fun = cum_normal_fun,
-  B = 10000, # 10 or 100 for testing code, 10000 once everything is working, it will take time
+  B = 1000, # 10 or 100 for testing code, 10000 once everything is working, it will take time
   ci = 0.95
 )
 # plot  psychometric functions
-theme_set(theme_bw(base_size = 14))
+theme_set(theme_bw(base_size = 13))
 
 xbreaks <- unique(ConnectedData$comparison)
 
@@ -92,7 +92,7 @@ plot(fit) +
   geom_vline(xintercept = 600, linetype = 'dotted') +
   labs(x = "comparison force (mN)", y = "Proportion called more intense")
 
-ggsave("filtereddata_psychfuns.pdf")
+ggsave("filtereddata_psychfuns1.pdf")
 
 # Plot the PSE
 plotthresholds(fit)
